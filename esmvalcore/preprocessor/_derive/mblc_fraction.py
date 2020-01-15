@@ -4,10 +4,9 @@ import dask.array as da
 import iris
 import iris.coord_categorisation
 
+from .._regrid import extract_levels
 from ._baseclass import DerivedVariableBase
 from ._shared import var_name_constraint
-from .._regrid import extract_levels
-
 
 LAT_CONSTRAINT = iris.Constraint(
     latitude=lambda c: -40.0 <= c <= -20.0 or 20.0 <= c <= 40.0)
@@ -30,9 +29,8 @@ def _total_cl_fraction(cl_cube, limit):
             z_coord = coord
             break
     else:
-        raise ValueError(
-            f"Cannot determine height axis (Z) of cube "
-            f"{cl_cube.summary(shorten=True)}")
+        raise ValueError(f"Cannot determine height axis (Z) of cube "
+                         f"{cl_cube.summary(shorten=True)}")
     z_idx = inv_cl_cube.coord_dims(z_coord)[0]
     total_cl = (1.0 - inv_cl_cube.core_data().prod(axis=z_idx)) * 100.0
     clt_cube = inv_cl_cube.collapsed(z_coord, iris.analysis.MEAN)  # dummy
@@ -51,8 +49,12 @@ class DerivedVariable(DerivedVariableBase):
     def required(project):
         """Declare the variables needed for derivation."""
         required = [
-            {'short_name': 'wap'},
-            {'short_name': 'cl'},
+            {
+                'short_name': 'wap'
+            },
+            {
+                'short_name': 'cl'
+            },
         ]
         return required
 
@@ -72,6 +74,9 @@ class DerivedVariable(DerivedVariableBase):
         wap_cube = extract_levels(wap_cube, OMEGA_LEVEL, 'linear')
 
         # Get monthly climatologies
+        # TODO: Remove when bug in iris is fixed
+        for aux_factory in mblc_cube.aux_factories:
+            mblc_cube.remove_aux_factory(aux_factory)
         iris.coord_categorisation.add_month_number(mblc_cube, 'time')
         iris.coord_categorisation.add_month_number(wap_cube, 'time')
         mblc_cube = mblc_cube.aggregated_by('month_number', iris.analysis.MEAN)
