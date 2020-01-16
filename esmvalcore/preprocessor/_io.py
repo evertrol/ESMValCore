@@ -9,8 +9,10 @@ from warnings import catch_warnings, filterwarnings
 
 import iris
 import iris.exceptions
+import netCDF4 as nc
 import numpy as np
 import yaml
+from iris import Constraint
 
 from .._task import write_ncl_settings
 
@@ -54,6 +56,20 @@ def concatenate_callback(raw_cube, field, _):
 def load(file, callback=None):
     """Load iris cubes from files."""
     logger.debug("Loading:\n%s", file)
+
+    dataset = nc.Dataset(file, mode='r')
+    for var in dataset.variables.values():
+        if 'formula_terms' in var.ncattrs():
+            formula_term = var.formula_terms
+            formula_var = var.name
+            logger.warning("Found formula_term '%s' for variable '%s'",
+                           formula_term, formula_var)
+            break
+    else:
+        formula_term = None
+        formula_var = None
+    dataset.close()
+
     with catch_warnings():
         filterwarnings(
             'ignore',
@@ -66,6 +82,10 @@ def load(file, callback=None):
         raise Exception('Can not load cubes from {0}'.format(file))
     for cube in raw_cubes:
         cube.attributes['source_file'] = file
+    if formula_term is not None:
+        for cube in raw_cubes:
+            cube.attributes['__FORMULA_TERMS__'] = formula_term
+            cube.attributes['__FORMULA_VAR__'] = formula_var
     return raw_cubes
 
 
@@ -84,12 +104,32 @@ def _fix_cube_attributes(cubes):
         cube.attributes = attributes
 
 
-def concatenate(cubes):
+def concatenate(cubes, concat_file, callback=None):
     """Concatenate all cubes after fixing metadata."""
+    concat_dir = os.path.dirname(concat_file)
+    if not os.path.isdir(concat_dir):
+        os.makedirs(concat_dir)
     _fix_cube_attributes(cubes)
     concatenated = iris.cube.CubeList(cubes).concatenate()
     if len(concatenated) == 1:
-        return concatenated[0]
+        cube = concatenated[0]
+        if '__FORMULA_TERMS__' in cube.attributes:
+            logger.warning(
+                "Saving intermediate cube to %s to fix derived coordinates",
+                concat_file)
+            iris.save(cube, concat_file)
+            dataset = nc.Dataset(concat_file, mode='a')
+            coord_var = dataset.variables[cube.attributes['__FORMULA_VAR__']]
+            coord_var.formula_terms = cube.attributes['__FORMULA_TERMS__']
+            var = dataset.variables[cube.var_name]
+            if hasattr(var, 'coordinates'):
+                var.delncattr('coordinates')
+            dataset.close()
+            cube = iris.load_cube(
+                concat_file,
+                Constraint(cube_func=lambda c: c.var_name == cube.var_name),
+                callback=callback)
+        return cube
     logger.error('Can not concatenate cubes into a single one.')
     logger.error('Resulting cubes:')
     for cube in concatenated:

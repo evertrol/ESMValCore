@@ -292,7 +292,13 @@ def _get_default_settings(variable, config_user, derive=False):
         'callback': concatenate_callback,
     }
     # Configure merge
-    settings['concatenate'] = {}
+    concat_dir = os.path.splitext(variable['filename'])[0] + '_concat'
+    concat_file = os.path.join(concat_dir,
+                               os.path.basename(variable['filename']))
+    settings['concatenate'] = {
+        'concat_file': concat_file,
+        'callback': concatenate_callback,
+    }
 
     # Configure fixes
     fix = {
