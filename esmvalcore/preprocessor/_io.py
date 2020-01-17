@@ -106,14 +106,14 @@ def _fix_cube_attributes(cubes):
 
 def concatenate(cubes, concat_file, callback=None):
     """Concatenate all cubes after fixing metadata."""
-    concat_dir = os.path.dirname(concat_file)
-    if not os.path.isdir(concat_dir):
-        os.makedirs(concat_dir)
     _fix_cube_attributes(cubes)
     concatenated = iris.cube.CubeList(cubes).concatenate()
     if len(concatenated) == 1:
         cube = concatenated[0]
         if '__FORMULA_TERMS__' in cube.attributes:
+            concat_dir = os.path.dirname(concat_file)
+            if not os.path.isdir(concat_dir):
+                os.makedirs(concat_dir)
             logger.warning(
                 "Saving intermediate cube to %s to fix derived coordinates",
                 concat_file)
@@ -130,7 +130,11 @@ def concatenate(cubes, concat_file, callback=None):
                 Constraint(cube_func=lambda c: c.var_name == cube.var_name),
                 callback=callback)
         return cube
-    logger.error('Can not concatenate cubes into a single one.')
+    try:
+        iris.cube.CubeList(cubes).concatenate_cube()
+    except iris.exceptions.ConcatenateError as exc:
+        msg = str(exc)
+    logger.error('Can not concatenate cubes into a single one: %s', msg)
     logger.error('Resulting cubes:')
     for cube in concatenated:
         logger.error(cube)
@@ -140,7 +144,7 @@ def concatenate(cubes, concat_file, callback=None):
             pass
         else:
             logger.error('From %s to %s', time.cell(0), time.cell(-1))
-    raise ValueError('Can not concatenate cubes.')
+    raise ValueError(f'Can not concatenate cubes: {msg}')
 
 
 def save(cubes, filename, optimize_access='', compress=False, **kwargs):

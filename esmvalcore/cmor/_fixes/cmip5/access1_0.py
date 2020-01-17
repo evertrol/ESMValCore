@@ -1,7 +1,8 @@
 """Fixes for the ACCESS1-0 model."""
 
-from cf_units import Unit
 import iris
+from cf_units import Unit
+
 from ..fix import Fix
 
 
@@ -31,4 +32,25 @@ class AllVars(Fix):
                 continue
             else:
                 time.units = Unit(time.units.name, 'gregorian')
+        return cubes
+
+
+class Cl(Fix):
+    """Fixes for ``cl``."""
+
+    def fix_metadata(self, cubes):
+        """Remove attributes from ``vertical coordinate formula term: b(k)``.
+
+        Parameters
+        ----------
+        cube : iris.cube.CubeList
+
+        Returns
+        -------
+        iris.cube.Cube
+
+        """
+        cube = self.get_cube_from_list(cubes)
+        coord = cube.coord(long_name='vertical coordinate formula term: b(k)')
+        coord.attributes = {}
         return cubes

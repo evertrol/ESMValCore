@@ -18,6 +18,6 @@ class Cl(Fix):
 
         """
         cube = self.get_cube_from_list(cubes)
-        coord = cube.coord('Surface Air Pressure')
+        coord = cube.coord(long_name='Surface Air Pressure')
         coord.attributes = {}
         return cubes

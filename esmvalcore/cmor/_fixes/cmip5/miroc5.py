@@ -1,8 +1,13 @@
 """Fixes for MIROC5 model."""
 from dask import array as da
 
+from ..cmip6.miroc6 import Cl as BaseCl
 from ..fix import Fix
 from ..shared import round_coordinates
+
+
+class Cl(BaseCl):
+    """Fixes for ``cl``."""
 
 
 class Sftof(Fix):
