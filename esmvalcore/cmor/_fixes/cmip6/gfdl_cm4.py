@@ -1,8 +1,13 @@
 """Fixes for GFDL-CM4 model."""
 import iris
 
+from ..cmip5.canesm2 import Cl as BaseCl
 from ..fix import Fix
 from ..shared import add_scalar_height_coord
+
+
+class Cl(BaseCl):
+    """Fixes for ``cl``."""
 
 
 class Tas(Fix):

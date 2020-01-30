@@ -3,7 +3,12 @@
 from iris.coords import DimCoord
 from iris.exceptions import CoordinateNotFoundError
 
+from .bcc_csm1_1 import Cl as BaseCl
 from ..fix import Fix
+
+
+class Cl(BaseCl):
+    """Fixes for ``cl``."""
 
 
 class Tro3(Fix):

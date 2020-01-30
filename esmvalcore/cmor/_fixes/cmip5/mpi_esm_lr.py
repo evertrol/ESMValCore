@@ -1,6 +1,10 @@
-
 """Fixes for MPI ESM LR model."""
+from .canesm2 import Cl as BaseCl
 from ..fix import Fix
+
+
+class Cl(BaseCl):
+    """Fixes for cl."""
 
 
 class Pctisccp(Fix):

@@ -1,9 +1,61 @@
 """Fixes for bcc-csm1-1."""
+from shutil import copyfile
+
+import netCDF4 as nc
 import numpy as np
 from scipy.interpolate import InterpolatedUnivariateSpline
 from scipy.ndimage import map_coordinates
 
 from ..fix import Fix
+
+
+class Cl(Fix):
+    """Fixes for cl."""
+
+    def fix_file(self, filepath, output_dir):
+        """Fix file.
+
+        Fix file so that :mod:`iris` correctly reads bounds of
+        ``'atmosphere_hybrid_sigma_pressure_coordinate'`` coordinate.
+
+        Parameters
+        ----------
+        filepath : str
+            Input file.
+        output_dir : str
+            Output directory of new file.
+
+        Returns
+        -------
+        str
+            Path to new file.
+
+        """
+        new_path = self.get_fixed_filepath(output_dir, filepath)
+        copyfile(filepath, new_path)
+        dataset = nc.Dataset(new_path, mode='a')
+        lev_var = dataset.variables['lev']
+        lev_var.standard_name = 'atmosphere_hybrid_sigma_pressure_coordinate'
+        lev_var.formula_terms = 'p0: p0 a: a b: b ps: ps'
+        for bounds in ('bnds', 'bounds'):
+            if (f'a_{bounds}' in dataset.variables and
+                    f'b_{bounds}' in dataset.variables):
+                a_bnds = f'a_{bounds}'
+                b_bnds = f'b_{bounds}'
+                break
+        else:
+            raise ValueError("No bounds for 'a' and 'b' found")
+        dataset.variables['a'].bounds = a_bnds
+        dataset.variables['b'].bounds = b_bnds
+        for bounds in ('bnds', 'bounds'):
+            if f'lev_{bounds}' in dataset.variables:
+                dataset.variables[f'lev_{bounds}'].formula_terms = (
+                    f'p0: p0 a: {a_bnds} b: {b_bnds} ps: ps')
+            break
+        else:
+            raise ValueError("No bounds for 'lev' found")
+        dataset.close()
+        return new_path
 
 
 class Tos(Fix):

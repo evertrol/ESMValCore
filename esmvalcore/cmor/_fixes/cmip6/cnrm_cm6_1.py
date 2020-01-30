@@ -1,12 +1,12 @@
-"""Fixes for MIROC6 model."""
-from ..cmip5.bcc_csm1_1 import Cl as BaseCl
+"""Fixes for CNRM-CM6-1 model."""
+from ..cmip5.canesm2 import Cl as BaseCl
 
 
 class Cl(BaseCl):
     """Fixes for ``cl``."""
 
     def fix_metadata(self, cubes):
-        """Remove attributes from ``Surface Air Pressure`` coordinate.
+        """Add bounds for latitude and longitude.
 
         Parameters
         ----------
@@ -18,6 +18,6 @@ class Cl(BaseCl):
 
         """
         cube = self.get_cube_from_list(cubes)
-        coord = cube.coord(long_name='Surface Air Pressure')
-        coord.attributes = {}
+        for coord_name in ('latitude', 'longitude'):
+            cube.coord(coord_name).guess_bounds()
         return cubes

@@ -60,13 +60,13 @@ def load(file, callback=None):
     dataset = nc.Dataset(file, mode='r')
     for var in dataset.variables.values():
         if 'formula_terms' in var.ncattrs():
-            formula_term = var.formula_terms
+            formula_terms = var.formula_terms
             formula_var = var.name
-            logger.warning("Found formula_term '%s' for variable '%s'",
-                           formula_term, formula_var)
+            logger.debug("Found formula_terms '%s' for variable '%s'",
+                         formula_terms, formula_var)
             break
     else:
-        formula_term = None
+        formula_terms = None
         formula_var = None
     dataset.close()
 
@@ -82,9 +82,9 @@ def load(file, callback=None):
         raise Exception('Can not load cubes from {0}'.format(file))
     for cube in raw_cubes:
         cube.attributes['source_file'] = file
-    if formula_term is not None:
+    if formula_terms is not None:
         for cube in raw_cubes:
-            cube.attributes['__FORMULA_TERMS__'] = formula_term
+            cube.attributes['__FORMULA_TERMS__'] = formula_terms
             cube.attributes['__FORMULA_VAR__'] = formula_var
     return raw_cubes
 

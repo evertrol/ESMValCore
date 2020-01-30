@@ -1,30 +1,12 @@
 """Fixes for CESM2 model."""
-from shutil import copyfile
-
-import netCDF4 as nc
-
+from ..cmip5.bcc_csm1_1 import Cl as BaseCl
 from ..fix import Fix
 from ..shared import (add_scalar_depth_coord, add_scalar_height_coord,
                       add_scalar_typeland_coord, add_scalar_typesea_coord)
 
 
-class Cl(Fix):
-    """Fixes for cl."""
-
-    def fix_file(self, filepath, output_dir):
-        """Add correct standard_name for derived coordinate ``'air_pressure'``.
-
-        This is not possible once :mod:`iris` loaded the cube.
-
-        """
-        new_path = self.get_fixed_filepath(output_dir, filepath)
-        copyfile(filepath, new_path)
-        dataset = nc.Dataset(new_path, mode='a')
-        lev_var = dataset.variables['lev']
-        lev_var.standard_name = 'atmosphere_hybrid_sigma_pressure_coordinate'
-        lev_var.formula_terms = 'p0: p0 a: a b: b ps: ps'
-        dataset.close()
-        return new_path
+class Cl(BaseCl):
+    """Fixes for ``cl``."""
 
 
 class Fgco2(Fix):
