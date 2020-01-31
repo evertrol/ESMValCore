@@ -1,4 +1,4 @@
-"""Fixes for MPI ESM LR model."""
+"""Fixes for MPI-ESM-LR model."""
 from .canesm2 import Cl as BaseCl
 from ..fix import Fix
 
