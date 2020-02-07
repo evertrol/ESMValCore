@@ -1,5 +1,5 @@
 """Fixes for MPI-ESM1-2-HR model."""
-from ..cmip5.canesm2 import Cl as BaseCl
+from ..cmip5.bcc_csm1_1 import Cl as BaseCl
 from ..fix import Fix
 from ..shared import add_scalar_height_coord
 

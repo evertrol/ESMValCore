@@ -9,10 +9,8 @@ from warnings import catch_warnings, filterwarnings
 
 import iris
 import iris.exceptions
-import netCDF4 as nc
 import numpy as np
 import yaml
-from iris import Constraint
 
 from .._task import write_ncl_settings
 
@@ -27,6 +25,41 @@ VARIABLE_KEYS = {
     'reference_dataset',
     'alternative_dataset',
 }
+
+
+def _fix_aux_factories(cube):
+    """Fix :class:`iris.aux_factory.AuxCoordFactory` after concatenation.
+
+    Necessary because of bug in :mod:`iris` (see issue #2478).
+
+    """
+    coord_names = [coord.name() for coord in cube.coords()]
+
+    # Hybrid sigma pressure coordinate
+    if 'atmosphere_hybrid_sigma_pressure_coordinate' in coord_names:
+        new_aux_factory = iris.aux_factory.HybridPressureFactory(
+            delta=cube.coord(var_name='ap'),
+            sigma=cube.coord(var_name='b'),
+            surface_air_pressure=cube.coord(var_name='ps'),
+        )
+        for aux_factory in cube.aux_factories:
+            if isinstance(aux_factory, iris.aux_factory.HybridPressureFactory):
+                break
+        else:
+            cube.add_aux_factory(new_aux_factory)
+
+    # Hybrid sigma height coordinate
+    if 'atmosphere_hybrid_height_coordinate' in coord_names:
+        new_aux_factory = iris.aux_factory.HybridHeightFactory(
+            delta=cube.coord(var_name='lev'),
+            sigma=cube.coord(var_name='b'),
+            orography=cube.coord(var_name='orog'),
+        )
+        for aux_factory in cube.aux_factories:
+            if isinstance(aux_factory, iris.aux_factory.HybridHeightFactory):
+                break
+        else:
+            cube.add_aux_factory(new_aux_factory)
 
 
 def _get_attr_from_field_coord(ncfield, coord_name, attr):
@@ -56,20 +89,6 @@ def concatenate_callback(raw_cube, field, _):
 def load(file, callback=None):
     """Load iris cubes from files."""
     logger.debug("Loading:\n%s", file)
-
-    dataset = nc.Dataset(file, mode='r')
-    for var in dataset.variables.values():
-        if 'formula_terms' in var.ncattrs():
-            formula_terms = var.formula_terms
-            formula_var = var.name
-            logger.debug("Found formula_terms '%s' for variable '%s'",
-                         formula_terms, formula_var)
-            break
-    else:
-        formula_terms = None
-        formula_var = None
-    dataset.close()
-
     with catch_warnings():
         filterwarnings(
             'ignore',
@@ -82,10 +101,6 @@ def load(file, callback=None):
         raise Exception('Can not load cubes from {0}'.format(file))
     for cube in raw_cubes:
         cube.attributes['source_file'] = file
-    if formula_terms is not None:
-        for cube in raw_cubes:
-            cube.attributes['__FORMULA_TERMS__'] = formula_terms
-            cube.attributes['__FORMULA_VAR__'] = formula_var
     return raw_cubes
 
 
@@ -104,32 +119,16 @@ def _fix_cube_attributes(cubes):
         cube.attributes = attributes
 
 
-def concatenate(cubes, concat_file, callback=None):
+def concatenate(cubes):
     """Concatenate all cubes after fixing metadata."""
     _fix_cube_attributes(cubes)
     concatenated = iris.cube.CubeList(cubes).concatenate()
     if len(concatenated) == 1:
         cube = concatenated[0]
-        if '__FORMULA_TERMS__' in cube.attributes:
-            concat_dir = os.path.dirname(concat_file)
-            if not os.path.isdir(concat_dir):
-                os.makedirs(concat_dir)
-            logger.warning(
-                "Saving intermediate cube to %s to fix derived coordinates",
-                concat_file)
-            iris.save(cube, concat_file)
-            dataset = nc.Dataset(concat_file, mode='a')
-            coord_var = dataset.variables[cube.attributes['__FORMULA_VAR__']]
-            coord_var.formula_terms = cube.attributes['__FORMULA_TERMS__']
-            var = dataset.variables[cube.var_name]
-            if hasattr(var, 'coordinates'):
-                var.delncattr('coordinates')
-            dataset.close()
-            cube = iris.load_cube(
-                concat_file,
-                Constraint(cube_func=lambda c: c.var_name == cube.var_name),
-                callback=callback)
+        _fix_aux_factories(cube)
         return cube
+
+    # Concatenation not successful -> retrieve exact error message
     try:
         iris.cube.CubeList(cubes).concatenate_cube()
     except iris.exceptions.ConcatenateError as exc:

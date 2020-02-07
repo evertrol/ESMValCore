@@ -1,6 +1,6 @@
 """Fixes for MPI-ESM-LR model."""
-from .canesm2 import Cl as BaseCl
 from ..fix import Fix
+from .bcc_csm1_1 import Cl as BaseCl
 
 
 class Cl(BaseCl):

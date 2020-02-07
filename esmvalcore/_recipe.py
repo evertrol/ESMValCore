@@ -292,14 +292,8 @@ def _get_default_settings(variable, config_user, derive=False):
     settings['load'] = {
         'callback': concatenate_callback,
     }
-    # Configure merge
-    concat_dir = os.path.splitext(variable['filename'])[0] + '_concat'
-    concat_file = os.path.join(concat_dir,
-                               os.path.basename(variable['filename']))
-    settings['concatenate'] = {
-        'concat_file': concat_file,
-        'callback': concatenate_callback,
-    }
+    # Configure concatenation
+    settings['concatenate'] = {}
 
     # Configure fixes
     fix = {

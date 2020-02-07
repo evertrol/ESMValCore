@@ -1,61 +1,65 @@
 """Fixes for bcc-csm1-1."""
-from shutil import copyfile
-
-import netCDF4 as nc
+import iris
 import numpy as np
 from scipy.interpolate import InterpolatedUnivariateSpline
 from scipy.ndimage import map_coordinates
 
 from ..fix import Fix
+from ..shared import fix_bounds
 
 
 class Cl(Fix):
     """Fixes for cl."""
 
-    def fix_file(self, filepath, output_dir):
-        """Fix file.
-
-        Fix file so that :mod:`iris` correctly reads bounds of
-        ``'atmosphere_hybrid_sigma_pressure_coordinate'`` coordinate.
+    def fix_metadata(self, cubes):
+        """Fix hybrid sigma pressure coordinate.
 
         Parameters
         ----------
-        filepath : str
-            Input file.
-        output_dir : str
-            Output directory of new file.
+        cubes : iris.cube.CubeList
+            Input cubes which need to be fixed.
 
         Returns
         -------
-        str
-            Path to new file.
+        iris.cube.CubeList
 
         """
-        new_path = self.get_fixed_filepath(output_dir, filepath)
-        copyfile(filepath, new_path)
-        dataset = nc.Dataset(new_path, mode='a')
-        lev_var = dataset.variables['lev']
-        lev_var.standard_name = 'atmosphere_hybrid_sigma_pressure_coordinate'
-        lev_var.formula_terms = 'p0: p0 a: a b: b ps: ps'
-        for bounds in ('bnds', 'bounds'):
-            if (f'a_{bounds}' in dataset.variables and
-                    f'b_{bounds}' in dataset.variables):
-                a_bnds = f'a_{bounds}'
-                b_bnds = f'b_{bounds}'
-                break
-        else:
-            raise ValueError("No bounds for 'a' and 'b' found")
-        dataset.variables['a'].bounds = a_bnds
-        dataset.variables['b'].bounds = b_bnds
-        for bounds in ('bnds', 'bounds'):
-            if f'lev_{bounds}' in dataset.variables:
-                dataset.variables[f'lev_{bounds}'].formula_terms = (
-                    f'p0: p0 a: {a_bnds} b: {b_bnds} ps: ps')
-            break
-        else:
-            raise ValueError("No bounds for 'lev' found")
-        dataset.close()
-        return new_path
+        cl_cube = self.get_cube_from_list(cubes)
+
+        # Remove all existing aux_factories
+        for aux_factory in cl_cube.aux_factories:
+            cl_cube.remove_aux_factory(aux_factory)
+
+        # Fix bounds
+        coords_to_fix = ['b']
+        try:
+            cl_cube.coord(var_name='a')
+            coords_to_fix.append('a')
+        except iris.exceptions.CoordinateNotFoundError:
+            coords_to_fix.append('ap')
+        fix_bounds(cl_cube, cubes, coords_to_fix)
+
+        # Fix bounds for ap if only a is given in original file
+        ap_coord = cl_cube.coord(var_name='ap')
+        if ap_coord.bounds is None:
+            cl_cube.remove_coord(ap_coord)
+            a_coord = cl_cube.coord(var_name='a')
+            p0_coord = cl_cube.coord(var_name='p0')
+            ap_coord = a_coord * p0_coord.points[0]
+            ap_coord.units = a_coord.units * p0_coord.units
+            ap_coord.rename('vertical pressure')
+            ap_coord.var_name = 'ap'
+            cl_cube.add_aux_coord(ap_coord, cl_cube.coord_dims(a_coord))
+
+        # Add aux_factory again
+        pressure_coord_factory = iris.aux_factory.HybridPressureFactory(
+            delta=ap_coord,
+            sigma=cl_cube.coord(var_name='b'),
+            surface_air_pressure=cl_cube.coord(var_name='ps'),
+        )
+        cl_cube.add_aux_factory(pressure_coord_factory)
+
+        return iris.cube.CubeList([cl_cube])
 
 
 class Tos(Fix):
@@ -69,6 +73,7 @@ class Tos(Fix):
         Parameters
         ----------
         cube: iris.cube.Cube
+            Input cube to fix.
 
         Returns
         -------
@@ -79,10 +84,12 @@ class Tos(Fix):
         rlon = cube.coord('grid_longitude').points
 
         # Transform grid latitude/longitude to array indices [0, 1, 2, ...]
-        rlat_to_idx = InterpolatedUnivariateSpline(
-            rlat, np.arange(len(rlat)), k=1)
-        rlon_to_idx = InterpolatedUnivariateSpline(
-            rlon, np.arange(len(rlon)), k=1)
+        rlat_to_idx = InterpolatedUnivariateSpline(rlat,
+                                                   np.arange(len(rlat)),
+                                                   k=1)
+        rlon_to_idx = InterpolatedUnivariateSpline(rlon,
+                                                   np.arange(len(rlon)),
+                                                   k=1)
         rlat_idx_bnds = rlat_to_idx(cube.coord('grid_latitude').bounds)
         rlon_idx_bnds = rlon_to_idx(cube.coord('grid_longitude').bounds)
 
@@ -90,16 +97,17 @@ class Tos(Fix):
         lat_vertices = []
         lon_vertices = []
         for (i, j) in [(0, 0), (0, 1), (1, 1), (1, 0)]:
-            (rlat_v, rlon_v) = np.meshgrid(
-                rlat_idx_bnds[:, i], rlon_idx_bnds[:, j], indexing='ij')
+            (rlat_v, rlon_v) = np.meshgrid(rlat_idx_bnds[:, i],
+                                           rlon_idx_bnds[:, j],
+                                           indexing='ij')
             lat_vertices.append(
-                map_coordinates(
-                    cube.coord('latitude').points, [rlat_v, rlon_v],
-                    mode='nearest'))
+                map_coordinates(cube.coord('latitude').points,
+                                [rlat_v, rlon_v],
+                                mode='nearest'))
             lon_vertices.append(
-                map_coordinates(
-                    cube.coord('longitude').points, [rlat_v, rlon_v],
-                    mode='wrap'))
+                map_coordinates(cube.coord('longitude').points,
+                                [rlat_v, rlon_v],
+                                mode='wrap'))
         lat_vertices = np.array(lat_vertices)
         lon_vertices = np.array(lon_vertices)
         lat_vertices = np.moveaxis(lat_vertices, 0, -1)

@@ -1,4 +1,3 @@
-
 """Fix FGOALS-g2 model."""
 from cf_units import Unit
 from iris.exceptions import CoordinateNotFoundError

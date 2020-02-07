@@ -1,12 +1,11 @@
 """Fixes for the ACCESS1-0 model."""
-
 import iris
 from cf_units import Unit
 
+from ..cmip6.ukesm1_0_ll import Cl as BaseCl
 from ..fix import Fix
 
 
-# noinspection PyPep8
 class AllVars(Fix):
     """Common fixes to all vars."""
 
@@ -14,15 +13,16 @@ class AllVars(Fix):
         """
         Fix metadata.
 
-        Fixes wrong calendar 'gregorian' instead of 'proleptic_gregorian'
+        Fixes wrong calendar 'gregorian' instead of 'proleptic_gregorian'.
 
         Parameters
         ----------
-        cube: iris.cube.Cube
+        cubes : iris.cube.CubeList
+            Input cubes which need to be fixed.
 
         Returns
         -------
-        iris.cube.Cube
+        iris.cube.CubeList
 
         """
         for cube in cubes:
@@ -35,21 +35,25 @@ class AllVars(Fix):
         return cubes
 
 
-class Cl(Fix):
+class Cl(BaseCl):
     """Fixes for ``cl``."""
 
     def fix_metadata(self, cubes):
         """Remove attributes from ``vertical coordinate formula term: b(k)``.
 
+        Additionally add pressure level coordiante.
+
         Parameters
         ----------
-        cube : iris.cube.CubeList
+        cubes : iris.cube.CubeList
+            Input cubes which need to be fixed.
 
         Returns
         -------
-        iris.cube.Cube
+        iris.cube.CubeList
 
         """
+        cubes = super().fix_metadata(cubes)
         cube = self.get_cube_from_list(cubes)
         coord = cube.coord(long_name='vertical coordinate formula term: b(k)')
         coord.attributes = {}

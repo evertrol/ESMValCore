@@ -17,6 +17,7 @@ class Cl(BaseCl):
         iris.cube.Cube
 
         """
+        cubes = super().fix_metadata(cubes)
         cube = self.get_cube_from_list(cubes)
         coord = cube.coord(long_name='Surface Air Pressure')
         coord.attributes = {}
